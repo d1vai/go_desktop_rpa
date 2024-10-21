@@ -1,153 +1,21 @@
 package main
 
 import (
-	_ "embed"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/eyasliu/desktop"
 	"github.com/eyasliu/desktop/tray"
-	"github.com/go-ole/go-ole"
 )
 
 //go:embed dog.ico
-var dogIco []byte
-var FallbackPage string = `<h1>出错了</h1>`
+// var dogIco []byte
+// var FallbackPage string = `<h1>出错了</h1>`
 
-type Shortcut struct {
-	Name       string
-	TargetPath string
-}
-
-func GetDesktopShortcuts() (map[string]string, error) {
-	ole.CoInitialize(0)
-	defer ole.CoUninitialize()
-
-	shortcuts := make(map[string]string)
-
-	// 获取当前用户的桌面路径
-	userDesktop := os.Getenv("USERPROFILE") + "\\Desktop"
-
-	// 获取公共桌面路径
-	publicDesktop := os.Getenv("PUBLIC") + "\\Desktop"
-
-	// 如果 PUBLIC 环境变量不存在，尝试使用固定路径
-	if publicDesktop == "\\Desktop" {
-		publicDesktop = "C:\\Users\\Public\\Desktop"
-	}
-
-	// 遍历两个桌面路径
-	for _, desktop := range []string{userDesktop, publicDesktop} {
-		err := filepath.Walk(desktop, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				fmt.Printf("Error accessing path %s: %v\n", path, err)
-				return nil // 继续遍历其他文件
-			}
-			if strings.ToLower(filepath.Ext(path)) == ".lnk" {
-				shortcut, err := getShortcutTarget(path)
-				if err != nil {
-					fmt.Printf("Error processing %s: %v\n", path, err)
-					return nil // 继续遍历其他文件
-				}
-				shortcuts[shortcut.Name] = shortcut.TargetPath
-			}
-			return nil
-		})
-
-		if err != nil {
-			fmt.Printf("Error walking the path %s: %v\n", desktop, err)
-			// 不返回错误，继续处理另一个桌面
-		}
-	}
-
-	return shortcuts, nil
-}
-
-func getShortcutTarget(path string) (Shortcut, error) {
-	shortcut := Shortcut{Name: filepath.Base(path)}
-
-	unknown, err := ole.CreateInstance(ole.NewGUID("{72C24DD5-D70A-438B-8A42-98424B88AFB8}"), nil)
-	if err != nil {
-		return shortcut, err
-	}
-	defer unknown.Release()
-
-	shell := unknown.MustQueryInterface(ole.IID_IDispatch)
-	defer shell.Release()
-
-	v, err := shell.CallMethod("CreateShortcut", path)
-	if err != nil {
-		return shortcut, err
-	}
-	oleShortcut := v.ToIDispatch()
-	defer oleShortcut.Release()
-
-	v, err = oleShortcut.GetProperty("TargetPath")
-	if err != nil {
-		return shortcut, err
-	}
-	shortcut.TargetPath = v.ToString()
-
-	return shortcut, nil
-}
-
-func ShowMessageBox(title, message string) {
-	user32 := syscall.NewLazyDLL("user32.dll")
-	messageBox := user32.NewProc("MessageBoxW")
-
-	messageBox.Call(
-		0,
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(message))),
-		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(title))),
-		0,
-	)
-}
-
-func checkAndOpenApplication() bool {
-	// 获取并打印桌面快捷方式信息
-	shortcuts, err := GetDesktopShortcuts()
-	if err != nil {
-		fmt.Printf("Error getting desktop shortcuts: %v\n", err)
-		return false
-	}
-
-	fmt.Println("Desktop Shortcuts:")
-	for name, path := range shortcuts {
-		fmt.Printf("%s: %s\n", name, path)
-	}
-	fmt.Println() // 打印一个空行作为分隔
-
-	// 检查 "院校子系统基本版 2020.5.lnk" 是否存在
-	shortcutName := "院校子系统基本版 2020.5.lnk"
-	if shortcutPath, exists := shortcuts[shortcutName]; exists {
-		// 如果存在，打开软件
-		cmd := exec.Command("cmd", "/C", "start", "", shortcutPath)
-		err := cmd.Start()
-		if err != nil {
-			fmt.Printf("Error opening application: %v\n", err)
-			ShowMessageBox("错误", fmt.Sprintf("无法打开%s: %v", shortcutName, err))
-			return false
-		} else {
-			fmt.Printf("成功启动%s\n", shortcutName)
-			// sleep 5秒
-			time.Sleep(5 * time.Second)
-			return true
-		}
-	} else {
-		// 如果不存在，显示 Windows 弹窗
-		ShowMessageBox("提示", fmt.Sprintf("%s 未下载", shortcutName))
-		return false
-	}
-}
-
-func runWindowsUI() {
+func CreateAndRunApp() {
 	var app desktop.WebView
 	var appTray *tray.Tray
 
@@ -301,6 +169,7 @@ func runWindowsUI() {
 			},
 		},
 	}
+
 	app = desktop.New(&desktop.Options{
 		Debug:             true,
 		AutoFocus:         true,
@@ -329,16 +198,4 @@ func runWindowsUI() {
 
 	// 运行应用程序
 	app.Run()
-}
-
-func main() {
-	// 获取并打印桌面快捷方式信息
-	success := checkAndOpenApplication()
-	if success {
-		fmt.Println("应用程序成功打开")
-	} else {
-		fmt.Println("应用程序未能成功打开")
-	}
-
-	runWindowsUI()
 }
