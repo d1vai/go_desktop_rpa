@@ -5,6 +5,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/go-vgo/robotgo"
 	"golang.org/x/sys/windows"
 )
 
@@ -75,5 +76,26 @@ func main() {
 	fmt.Println("Successfully created UI Automation object")
 
 	// Don't forget to release the COM object
-	automation.Release()
+	defer automation.Release()
+
+	// 使用 robotgo 获取窗口信息
+	// 这里以"记事本"为例，你可以替换为你想要查找的窗口标题
+	hwnd := robotgo.FindWindow("记事本")
+	if hwnd == 0 {
+		fmt.Println("未找到指定窗口")
+		return
+	}
+
+	// 获取窗口位置和大小
+	x, y, w, h := robotgo.GetBounds(hwnd)
+	fmt.Printf("窗口位置: x=%d, y=%d\n", x, y)
+	fmt.Printf("窗口大小: width=%d, height=%d\n", w, h)
+
+	// 获取窗口标题
+	title := robotgo.GetTitle(hwnd)
+	fmt.Printf("窗口标题: %s\n", title)
+
+	// 获取进程 ID
+	pid := robotgo.GetPID(hwnd)
+	fmt.Printf("进程 ID: %d\n", pid)
 }
